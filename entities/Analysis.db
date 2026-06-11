@@ -1,0 +1,73 @@
+{
+  "name": "Analysis",
+  "type": "object",
+  "properties": {
+    "product_url": {
+      "type": "string",
+      "description": "The Adler's Den product URL that was analysed"
+    },
+    "product_name": {
+      "type": "string",
+      "description": "Name of the product"
+    },
+    "product_price": {
+      "type": "number",
+      "description": "Price in INR"
+    },
+    "product_category": {
+      "type": "string",
+      "description": "Product category"
+    },
+    "product_type": {
+      "type": "string",
+      "enum": [
+        "hamper",
+        "single_chocolate"
+      ],
+      "description": "Classification of the product"
+    },
+    "product_description": {
+      "type": "string",
+      "description": "Product description text"
+    },
+    "composition_profile": {
+      "type": "object",
+      "description": "Structured composition extracted by AI"
+    },
+    "competitor_data": {
+      "type": "array",
+      "description": "Competitor products found for comparison"
+    },
+    "report": {
+      "type": "object",
+      "description": "The full 4-section analysis report"
+    },
+    "executive_summary": {
+      "type": "string",
+      "description": "One-line overall verdict"
+    },
+    "overall_confidence": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "description": "Overall confidence in the analysis"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "processing",
+        "completed",
+        "failed"
+      ],
+      "default": "processing",
+      "description": "Analysis status"
+    }
+  },
+  "required": [
+    "product_url",
+    "status"
+  ]
+}
