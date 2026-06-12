@@ -1,7 +1,7 @@
 # Adler's Den — Product Intelligence Tool · Handover Document
 
 **Last updated:** 2026-06-12
-**Live tool:** https://part-a-v2.vercel.app ✅ (password-gated)
+**Live tool:** https://part-a-v2.vercel.app ✅ (⚠️ currently OPEN — no auth, see §10)
 **Repository:** https://github.com/AdlersDen/adlers-den-intelligence (Public)
 **Vercel project:** `part-a-v2` (linked — see `.vercel/project.json`)
 
@@ -20,7 +20,10 @@ intelligence report covering:
 - **Improvement recommendations** — actionable suggestions
 - **Market gaps** — opportunities the analysis surfaces
 
-It is gated behind a password (`APP_PASSWORD`) in production.
+> ⚠️ **No access control is currently implemented.** The README and `.env.example`
+> describe a password gate (`APP_PASSWORD` / `PasswordGate` / `/api/auth-check`),
+> but none of that exists in the code — the app opens straight to the Dashboard.
+> The live tool and its API routes are publicly accessible. See §10.
 
 ---
 
@@ -94,18 +97,17 @@ is in `.env.example`. For production they must be set in the **Vercel dashboard*
 | `BROWSERLESS_API_KEY` | Optional | Headless scraping — https://www.browserless.io |
 | `WC_CONSUMER_KEY` | ✅ Required in prod | WooCommerce REST API key (Read-only) |
 | `WC_CONSUMER_SECRET` | ✅ Required in prod | WooCommerce REST API secret |
-| `APP_PASSWORD` | Production only | Password users enter to access the tool |
-| `VITE_DEV_PASSWORD` | Local dev only | Local password fallback (default: `adlers2025`) |
+| `APP_PASSWORD` | ❌ Not wired up | Described in `.env.example` but **unused** by current code |
+| `VITE_DEV_PASSWORD` | ❌ Not wired up | Described in `.env.example` but **unused** by current code |
 
 **WooCommerce keys:** WordPress Admin → WooCommerce → Settings → Advanced →
 REST API → Add key (Read permission is sufficient).
 
-> ⚠️ **Known gap:** the `_deploy.ps1` script pushes only these 6 keys:
+> **Note:** the `_deploy.ps1` script pushes exactly these 6 keys:
 > `GROQ_API_KEY`, `GEMINI_API_KEY`, `SERP_API_KEY`, `BROWSERLESS_API_KEY`,
-> `WC_CONSUMER_KEY`, `WC_CONSUMER_SECRET`.
-> It does **not** push `APP_PASSWORD`. If the production password gate isn't
-> working, set `APP_PASSWORD` manually in **Vercel → Project Settings →
-> Environment Variables**.
+> `WC_CONSUMER_KEY`, `WC_CONSUMER_SECRET` — which (verified 2026-06-12) are all
+> working in production. `APP_PASSWORD` / `VITE_DEV_PASSWORD` are not pushed and
+> not used by the code.
 
 > **Local-dev behaviour:** if `WC_CONSUMER_KEY` is missing in local dev, the tool
 > falls back to realistic mock product data. In production this fallback is disabled.
@@ -218,12 +220,17 @@ The next owner will need access to (or fresh keys for):
 
 ## 10. Known issues & open items
 
-1. **`APP_PASSWORD` not pushed by the deploy script** — set it manually in Vercel
-   if the production password gate fails (Section 5).
+1. **🔓 No access control (highest priority)** — the app and all `/api/*` routes
+   are publicly reachable at https://part-a-v2.vercel.app. Anyone with the URL can
+   run analyses, which **consumes Groq / SerpAPI / Browserless credits** and exposes
+   the WooCommerce-backed data. The README/`env.example` describe a password gate
+   (`APP_PASSWORD`, `PasswordGate`, `/api/auth-check`) that was **never implemented**.
+   Options: implement the password gate, add Vercel Password Protection
+   (Project → Settings → Deployment Protection), or restrict access another way.
 2. **Repo is public** — it contains the internal PRD (`Adlers_Den_Product_Intelligence_PRD.docx`).
    Switch to Private (Settings → Danger Zone) if that document shouldn't be public.
-3. **README vs. code mismatch** — README says Google Custom Search; the code uses
-   SerpAPI. Worth updating the README to avoid confusion.
+3. **README vs. code mismatch** — README mentions Google Custom Search + a password
+   gate; the code actually uses SerpAPI and has no gate. Worth updating the README.
 4. **Set the repo "Website" field** — point it at https://part-a-v2.vercel.app
    so the live tool is linked from GitHub.
 
@@ -237,7 +244,7 @@ The next owner will need access to (or fresh keys for):
 - [ ] Copy keys into `.env.local`
 - [ ] `npx vercel dev` to confirm the full pipeline works locally
 - [ ] Confirm you can access the live tool at https://part-a-v2.vercel.app
+- [ ] **Decide how to protect access** — the tool is currently open to anyone (§10.1)
 - [ ] `npx vercel login` → `.\_deploy.ps1` to redeploy / refresh keys when needed
-- [ ] Set `APP_PASSWORD` in Vercel if the password gate fails
 - [ ] Decide on repo visibility (Public vs. Private)
 ```
