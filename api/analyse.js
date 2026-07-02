@@ -193,6 +193,7 @@ You have deep knowledge of the Indian premium chocolate market including all maj
 
 Rules:
 - Be specific — reference actual composition details, actual competitor names, actual price points
+- When citing a competitor product, copy its product name EXACTLY as it appears in the competitor data. Do not shorten, embellish, rename, or merge product names, and never attribute flavours, ingredients, or claims to a competitor product unless they appear in its data.
 - NEVER suggest improvements that are listed under "Already Present in This Product"
 - Do NOT use vague language like "consider adding" without specifying what and why
 - Ground every insight in the composition data or competitor intelligence provided
@@ -603,21 +604,28 @@ ${builtUser}`
       const result = kept.join(' ').replace(/\s{2,}/g, ' ').trim();
       return result.length >= 20 ? result : text; // keep original if scrub gutted it
     };
-    pricing_verdict.analysis = scrubSentences(pricing_verdict.analysis);
+    // The model often writes rupee figures with a stray space after the
+    // decimal point ("₹4. 99/g", "₹3934. 69 per gram"). Join them — but ONLY
+    // when the ₹ prefix and a /g or per-gram suffix make it unambiguous, so
+    // a genuine sentence boundary ("…at ₹613. 72% dark…") is never merged.
+    const fixRupeeDecimals = (s) => typeof s === 'string'
+      ? s.replace(/₹\s?(\d[\d,]{0,6})\.\s+(\d{1,2})(?=\s*\/\s*g\b|\s*per\s*gram)/gi, '₹$1.$2')
+      : s;
+    pricing_verdict.analysis = fixRupeeDecimals(scrubSentences(pricing_verdict.analysis));
 
     // Normalise — ensure all required fields exist with safe defaults
     const normalised = {
-      executive_summary:    scrubSentences(report.executive_summary) || 'Analysis complete.',
+      executive_summary:    fixRupeeDecimals(scrubSentences(report.executive_summary)) || 'Analysis complete.',
       overall_confidence:   report.overall_confidence   || 'medium',
 
       pricing_verdict,
 
       composition_quality: report.composition_quality ? {
         rating:     report.composition_quality.rating || 'Good',
-        strengths:  report.composition_quality.strengths || [],
-        weaknesses: cleanedWeaknesses,
+        strengths:  (report.composition_quality.strengths || []).map(fixRupeeDecimals),
+        weaknesses: cleanedWeaknesses.map(fixRupeeDecimals),
         confidence: report.composition_quality.confidence || 'low',
-        notes:      cleanedNotes,
+        notes:      fixRupeeDecimals(cleanedNotes),
       } : {
         rating:     'Good',
         strengths:  [],
@@ -635,9 +643,9 @@ ${builtUser}`
             .slice(0, 4)
             .map(imp => ({
               title:       imp.title       || '',
-              description: imp.description || '',
+              description: fixRupeeDecimals(imp.description || ''),
               priority:    imp.priority    || 'medium',
-              impact:      imp.impact      || '',
+              impact:      fixRupeeDecimals(imp.impact || ''),
               confidence:  imp.confidence  || 'medium',  // E3
             }))
         : [],
@@ -646,6 +654,9 @@ ${builtUser}`
         ? report.market_gaps
             .filter(g => !looksTemplatey(g))
             .slice(0, 3)
+            .map(g => (g && typeof g === 'object'
+              ? { ...g, gap: fixRupeeDecimals(g.gap), opportunity: fixRupeeDecimals(g.opportunity) }
+              : g))
         : [],
 
       // E3: top-level market gaps confidence

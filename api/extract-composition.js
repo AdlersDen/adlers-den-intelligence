@@ -106,7 +106,7 @@ Rules:
 - "cocoa_percentage": extract any explicit percentage in the description like "70%", "63% cocoa", "55% dark" — return the integer (e.g. 70). If the description mentions a percentage in passing for an ingredient (e.g. "70% dark chocolate"), use that. Only return null if no percentage appears anywhere.
 - "weight_grams": extract any explicit weight mentioned in grams ("65g", "100 gms", "70 grams"). If multiple pack sizes are listed, use the SMALLEST one as weight_grams and put all of them in pack_options.
 - "pack_options": if the description lists multiple purchasable pack sizes with prices (e.g. "Standup pouch: Rs. 259 (65gms), 190ml Jar: Rs. 389 (100gms)"), extract each as an object. If there is only one price/size or none stated, return an empty array [].
-- "origin_country" / "origin_region": extract from phrases like "Kerala dark chocolate", "South Indian cocoa", "Madagascan beans" — these signal origin. Return null only if no origin info is present.
+- "origin_country" / "origin_region": extract from phrases like "Kerala dark chocolate", "South Indian cocoa", "Madagascan beans" — these signal origin. National chocolate styles count too: "Belgian chocolate" -> origin_country "Belgium", "Swiss chocolate" -> "Switzerland" (keep the style word in ingredients as well). Return null only if no origin info is present.
 - Never guess for fields not explicitly stated, but DO extract numeric values that appear in the description text — being too cautious leaves fields null when the data is right there.
 - Cross-validation: if chocolate_type is "milk", dietary.vegan and dietary.dairy_free MUST be false/null unless the description explicitly says otherwise (milk chocolate contains dairy by definition)`;
 }
