@@ -1368,6 +1368,19 @@ export default async function handler(req, res) {
       ? 'serpapi'
       : 'none';
 
+    // Condiments are never comparators for Adler's snack SKUs (dried fruits,
+    // flavoured nuts) — SerpAPI matches flavour words ("chilli") to pickles
+    // and chutney powders. Titles like "Masala Guava" survive because the
+    // regex requires the condiment noun itself, not the flavour adjective.
+    if (productClass === 'snack') {
+      const CONDIMENT_TITLE_RE = /\b(pickles?|achaa?r|chutney|podi|masala\s*(powder|paste)|spice\s*(mix|powder|blend)|seasonings?|sauces?|ketchup|dips?|papad)\b/i;
+      const before = competitors.length;
+      competitors = competitors.filter(c => !CONDIMENT_TITLE_RE.test(String(c.product_name || '')));
+      if (competitors.length < before) {
+        console.log(`[search-competitors] dropped ${before - competitors.length} condiment result(s) for snack product`);
+      }
+    }
+
     // ── Final relevance re-rank (source-agnostic) ──
     // A competitor sharing the product's DISTINCTIVE descriptor (mango,
     // black currant, orange…) is more relevant than one that only shares

@@ -36,6 +36,18 @@ function priceIsKnown(price) {
   return /\d/.test(p); // must contain at least one digit
 }
 
+// Parse the numeric price from a display string. Variable products carry a
+// RANGE ("₹275 – ₹428") — stripping every non-digit would concatenate the two
+// numbers into 275428, so instead take the FIRST number (the range floor,
+// which is the most conservative basis for per-gram / per-item math).
+function firstPriceNumber(price) {
+  if (!price || typeof price !== 'string') return null;
+  const m = price.match(/\d[\d,]*(?:\.\d+)?/);
+  if (!m) return null;
+  const n = parseFloat(m[0].replace(/,/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 // Parse a weight in grams from a competitor title/description. Many
 // marketplace + Shopping titles embed it: "Cornitos … 200 G",
 // "TopNut … 100gm", "1kg pack". Returns grams (10–5000) or null. Lets the
@@ -244,7 +256,7 @@ ${evidence}
   // hamper so it can compare value honestly (not just total price). The
   // search step estimates competitor item counts via name/description
   // heuristics; we surface them here together with our exact item count.
-  const adlerPriceNum = hasPrice ? parseFloat(String(productData.price).replace(/[^\d.]/g, '')) : null;
+  const adlerPriceNum = hasPrice ? firstPriceNumber(productData.price) : null;
   const perItemRows = (competitors || []).slice(0, 6).map(c => {
     const cnt = Number(c._estimated_item_count) || 1;
     const ppi = c.price_numeric ? Math.round(c.price_numeric / cnt) : null;
@@ -278,7 +290,7 @@ ${competitorSection}
 ${evidenceBlock}${perItemBlock}
 ## Your Task — Gift Hamper Analysis
 Evaluate this hamper on:
-- PRICING: ${hasPrice ? `Use PRICE-PER-ITEM (total price ÷ item count${itemCount ? ` = ₹${Math.round(parseFloat(String(productData.price).replace(/[^\d.]/g, '')) / itemCount)}/item across ${itemCount} items` : ''}) and overall positioning vs competitor hampers at similar price points. COMPANY RULE: do NOT use price-per-gram for hampers and do NOT mention weight data — judge value by item count, content variety, and packaging quality. Is the price justified on those terms?` : 'The exact price is UNAVAILABLE. You MUST set the verdict to exactly "Unavailable" and the analysis to a single sentence explaining the price could not be extracted. Do NOT invent a price range. Set confidence to "low" and recommended_price_range to null.'}
+- PRICING: ${hasPrice ? `Use PRICE-PER-ITEM (total price ÷ item count${adlerPriceNum && itemCount ? ` = ₹${Math.round(adlerPriceNum / itemCount)}/item across ${itemCount} items` : ''}) and overall positioning vs competitor hampers at similar price points. COMPANY RULE: do NOT use price-per-gram for hampers and do NOT mention weight data — judge value by item count, content variety, and packaging quality. Is the price justified on those terms?` : 'The exact price is UNAVAILABLE. You MUST set the verdict to exactly "Unavailable" and the analysis to a single sentence explaining the price could not be extracted. Do NOT invent a price range. Set confidence to "low" and recommended_price_range to null.'}
 - COMPOSITION: Curation breadth (how many chocolate types/formats), variety of flavours, inclusion of non-chocolate items, packaging quality vs competitors
 - IMPROVEMENTS: Concrete additions or changes NOT already present. Each improvement must name (a) the competitor whose strength you are countering, or (b) the specific composition gap you are filling. Do not write recipe-card recommendations.
 - MARKET GAPS: A specific gifting segment, occasion, or buyer this exact hamper composition could own — anchored to a real signal in the product (Diwali-specific corporate orders, vegan festive hampers, etc.). Each gap must be defensible from the product's existing strengths.
@@ -380,11 +392,15 @@ ${evidence}
       const p = packOptions.find(o => o.weight_grams === adlerWeight) || packOptions[0];
       return p.price_numeric;
     }
-    const n = parseFloat(String(productData.price).replace(/[^\d.]/g, ''));
-    return Number.isFinite(n) ? n : null;
+    return firstPriceNumber(productData.price);
   })();
+  // Sanity ceiling: even luxury chocolate stays under ~₹50/g in this market.
+  // A ₹/g above 100 means the price or weight parse went wrong — better to
+  // omit the per-gram math entirely than to feed the analyst a bad number.
+  const adlerPpg = (adlerWeight && adlerPriceForPpg) ? adlerPriceForPpg / adlerWeight : null;
+  const ppgSane  = adlerPpg != null && adlerPpg > 0 && adlerPpg <= 100;
   let perGramBlock = '';
-  if (hasPrice && adlerWeight && adlerPriceForPpg) {
+  if (hasPrice && ppgSane) {
     const rows = [];
     for (const c of (competitors || []).slice(0, 6)) {
       const w = (Number.isFinite(c.weight_grams) && c.weight_grams) ? c.weight_grams
@@ -397,7 +413,7 @@ ${evidence}
     }
     if (rows.length) {
       perGramBlock = `\n## Price-Per-Gram Math (use THIS for the pricing verdict)
-Adler's: ₹${adlerPriceForPpg} ÷ ${adlerWeight}g ≈ ₹${(adlerPriceForPpg / adlerWeight).toFixed(2)}/g
+Adler's: ₹${adlerPriceForPpg} ÷ ${adlerWeight}g ≈ ₹${adlerPpg.toFixed(2)}/g
 ${rows.join('\n')}
 
 RULE: judge price competitiveness on ₹/g, not raw pack totals. A competitor with a lower total price but a much larger pack may be MORE expensive per gram — do not call Adler's "higher priced" unless its ₹/g is genuinely higher. State the ₹/g comparison explicitly.
@@ -441,7 +457,7 @@ Respond ONLY with this JSON (fill every field, confidence reflects how much live
     "analysis": "2-3 specific sentences on price competitiveness.${perGramBlock ? ' Quote the product per-gram price and at least one competitor per-gram price from the Price-Per-Gram Math block, and make the verdict consistent with that comparison.' : ' Use pack-option prices if given; never mention missing weight.'}",
     "confidence": "high | medium | low",
     "recommended_price_range": "₹X,XXX–₹X,XXX (always provide this range if price is known, even if Competitive)${hasPrice ? '' : ' — MUST be null when verdict is Unavailable'}",
-    "price_per_gram": ${hasPrice && adlerWeight && adlerPriceForPpg ? (adlerPriceForPpg / adlerWeight).toFixed(2) : 'null'}
+    "price_per_gram": ${hasPrice && ppgSane ? adlerPpg.toFixed(2) : 'null'}
   },
   "composition_quality": {
     "rating": "Excellent | Good | Average | Below Average",

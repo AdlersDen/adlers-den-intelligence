@@ -169,6 +169,16 @@ function backfillFromText(composition, productType, productText) {
     }
   }
 
+  // Display consistency — the model echoes source-text casing ("Chilies",
+  // "dried guavas") so chips render with mixed capitalisation. Lowercase both
+  // ingredient and flavour-note lists.
+  if (Array.isArray(composition.ingredients)) {
+    composition.ingredients = composition.ingredients.map(i => typeof i === 'string' ? i.toLowerCase() : i);
+  }
+  if (Array.isArray(composition.key_flavour_notes)) {
+    composition.key_flavour_notes = composition.key_flavour_notes.map(i => typeof i === 'string' ? i.toLowerCase() : i);
+  }
+
   return composition;
 }
 
