@@ -236,9 +236,14 @@ export default function CompositionProfile({ composition, productType, classific
                   <div className="flex flex-wrap gap-1.5">
                     {composition.pack_options.map((pack, i) => (
                       <Badge key={i} variant="outline" className="text-xs font-body text-foreground/80 border-border">
-                        {pack.label ? `${pack.label}: ` : ''}
-                        {pack.price_numeric ? `₹${pack.price_numeric}` : ''}
-                        {pack.weight_grams ? ` · ${pack.weight_grams}g` : ''}
+                        {(() => {
+                          const detail = [
+                            pack.price_numeric ? `₹${pack.price_numeric}` : null,
+                            pack.weight_grams ? `${pack.weight_grams}g` : null,
+                          ].filter(Boolean).join(' · ');
+                          if (!detail) return pack.label || '—';
+                          return pack.label ? `${pack.label}: ${detail}` : detail;
+                        })()}
                       </Badge>
                     ))}
                   </div>
