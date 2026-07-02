@@ -4,7 +4,7 @@
 // end-to-end without going through the UI.
 import { readFile, writeFile } from 'node:fs/promises';
 
-const BASE = 'http://localhost:3000';
+const BASE = process.env.BASE || 'http://localhost:3000';
 const URL_TO_TEST = process.argv[2] || 'https://adlersden.com/product/valentines-day-sinful-love-chocolate-box/';
 
 async function call(route, body) {
