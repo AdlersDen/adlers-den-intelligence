@@ -196,20 +196,48 @@ const HAMPER_FIELDS = [
   'chocolate_types_present', 'summary',
 ];
 
+// Human-readable labels for the completeness fields — surfaced by the UI so
+// the founder can expand "5/12 fields extracted" and see exactly which
+// fields the source page didn't provide.
+const FIELD_LABELS = {
+  format:                  'format',
+  chocolate_type:          'chocolate type',
+  cocoa_percentage:        'cocoa percentage',
+  origin_country:          'origin country',
+  origin_region:           'origin region',
+  is_bean_to_bar:          'bean-to-bar credential',
+  ingredients:             'ingredients',
+  key_flavour_notes:       'flavour notes',
+  weight_grams:            'weight',
+  processing_method:       'processing method',
+  quality_tier:            'quality tier',
+  summary:                 'summary',
+  items:                   'itemised contents',
+  total_weight_grams:      'total weight',
+  packaging_quality:       'packaging quality',
+  occasion_fit:            'occasion fit',
+  chocolate_types_present: 'chocolate types present',
+};
+
 function computeDataCompleteness(composition, productType) {
   const fields = productType === 'hamper' ? HAMPER_FIELDS : SINGLE_FIELDS;
   let filled = 0;
+  const missing = [];
   for (const f of fields) {
     const v = composition[f];
-    if (v === null || v === undefined) continue;
-    if (Array.isArray(v) && v.length === 0) continue;
-    if (typeof v === 'string' && v.trim() === '') continue;
+    const isEmpty = v === null || v === undefined
+      || (Array.isArray(v) && v.length === 0)
+      || (typeof v === 'string' && v.trim() === '');
+    if (isEmpty) {
+      missing.push(FIELD_LABELS[f] || f.replace(/_/g, ' '));
+      continue;
+    }
     filled++;
   }
   const total = fields.length;
   const ratio = total > 0 ? filled / total : 0;
   const level = ratio >= 0.7 ? 'high' : ratio >= 0.4 ? 'medium' : 'low';
-  return { filled, total, ratio: Math.round(ratio * 100), level };
+  return { filled, total, ratio: Math.round(ratio * 100), level, missing };
 }
 
 // ── Route handler ──────────────────────────────────────────
@@ -252,7 +280,7 @@ export default async function handler(req, res) {
       return res.status(200).json({
         classification,
         composition: { summary: 'Composition data unavailable — description may be too brief.' },
-        data_completeness: { filled: 0, total: 1, ratio: 0, level: 'low' },
+        data_completeness: { filled: 0, total: 1, ratio: 0, level: 'low', missing: ['composition'] },
       });
     }
 

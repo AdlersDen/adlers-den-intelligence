@@ -44,9 +44,20 @@ export default function CompositionProfile({ composition, productType, classific
             <div className="flex flex-col items-end gap-1">
               <ConfidenceBadge level={confidenceLevel} />
               {dataCompleteness && (
-                <span className="text-[10px] font-body text-muted-foreground/60">
-                  {dataCompleteness.filled}/{dataCompleteness.total} fields extracted
-                </span>
+                Array.isArray(dataCompleteness.missing) && dataCompleteness.missing.length > 0 ? (
+                  <details className="text-right">
+                    <summary className="text-[10px] font-body text-muted-foreground/60 cursor-pointer select-none hover:text-muted-foreground w-fit ml-auto">
+                      {dataCompleteness.filled}/{dataCompleteness.total} fields extracted ▾
+                    </summary>
+                    <p className="text-[10px] font-body text-muted-foreground/50 mt-1 max-w-[240px]">
+                      Not on the source page: {dataCompleteness.missing.join(', ')}
+                    </p>
+                  </details>
+                ) : (
+                  <span className="text-[10px] font-body text-muted-foreground/60">
+                    {dataCompleteness.filled}/{dataCompleteness.total} fields extracted
+                  </span>
+                )
               )}
             </div>
           </div>

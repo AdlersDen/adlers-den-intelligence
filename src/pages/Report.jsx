@@ -167,6 +167,16 @@ export default function Report() {
                   {lowDataReasons.join(' · ')}. Treat verdicts as guidance, not final figures.
                 </p>
               )}
+              {Array.isArray(dc?.missing) && dc.missing.length > 0 && (
+                <details className="mt-1.5">
+                  <summary className="font-body text-xs text-amber-300/80 cursor-pointer select-none hover:text-amber-200 w-fit">
+                    Show the {dc.missing.length} field{dc.missing.length !== 1 ? 's' : ''} we could not extract
+                  </summary>
+                  <p className="font-body text-xs text-amber-300/60 mt-1">
+                    {dc.missing.join(' · ')} — the source page does not state these, so they are omitted from the analysis rather than guessed.
+                  </p>
+                </details>
+              )}
             </div>
           </motion.div>
         )}
