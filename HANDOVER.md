@@ -1,45 +1,45 @@
 # Adler's Den — Product Intelligence Tool · Handover Document
 
-**Last updated:** 2026-06-12
-**Live tool:** https://part-a-v2.vercel.app ✅ (⚠️ currently OPEN — no auth, see §10)
+**Last updated:** 3 July 2026
+**Live tool:** https://part-a-v2.vercel.app ✅ (⚠️ currently OPEN — no auth, see §11)
 **Repository:** https://github.com/AdlersDen/adlers-den-intelligence (Public)
-**Vercel project:** `part-a-v2` (linked — see `.vercel/project.json`)
+**Vercel project:** `part-a-v2`, linked to the GitHub repo — **every push to `main` auto-deploys to production** (~1 minute)
 
 ---
 
 ## 1. What this is
 
-An internal web tool for **competitive analysis of Adler's Den chocolate products**.
+An internal web tool for **competitive analysis of Adler's Den products** (chocolates, flavoured nuts & dried fruits, and gift hampers).
 
-A user pastes a product URL (or concept) and the tool returns an AI-generated
-intelligence report covering:
+A user provides one of three inputs and receives an AI-generated intelligence report:
 
-- **Pricing analysis** — how the product is priced vs. the market
-- **Composition profiling** — ingredients / product type classification
-- **Competitor benchmarking** — live competitor listings pulled from the web
-- **Improvement recommendations** — actionable suggestions
-- **Market gaps** — opportunities the analysis surfaces
+| Input mode | What the user provides | Typical use |
+|---|---|---|
+| **Product URL** | An `adlersden.com/product/...` link | Analyse a live SKU |
+| **Concept — text brief** | A paragraph describing an unlaunched product | Validate a new idea |
+| **Concept — structured form** | Name, price, format, cocoa %, weight, ingredients, occasion | Validate a fully specified single product (hampers: use the text brief — the form is single-product by design) |
+
+Every report contains: executive summary · pricing verdict with per-gram (single products) or per-item (hampers) math · composition profile with a data-completeness score and an expandable list of missing fields · composition quality rating · recommended improvements anchored to named competitors · market gaps · the live competitor list with links and prices.
 
 > ⚠️ **No access control is currently implemented.** The README and `.env.example`
 > describe a password gate (`APP_PASSWORD` / `PasswordGate` / `/api/auth-check`),
 > but none of that exists in the code — the app opens straight to the Dashboard.
-> The live tool and its API routes are publicly accessible. See §10.
+> The live tool and its API routes are publicly accessible. See §11.
 
 ---
 
-## 2. Current status (as of 2026-06-12)
+## 2. Current status (verified 3 July 2026)
 
 | Item | Status |
 |---|---|
-| Source code | ✅ Pushed to GitHub (`main` branch) |
-| Repository visibility | ⚠️ **Public** — contains an internal PRD `.docx`. Switch to Private if that's not intended. |
-| Secrets | ✅ Safe — `.env`, `.env.local`, `.vercel/` are git-ignored and were **not** uploaded |
-| Vercel project link | ✅ Exists (`part-a-v2`, Vite framework, Node 24.x) |
-| **Production deployment** | ✅ **Live** at https://part-a-v2.vercel.app (serves the app, HTTP 200) |
-| Production env vars on Vercel | ✅ Appears configured (the live site loads). Re-run `.\_deploy.ps1` after any key change. |
-
-> **To redeploy / refresh keys:** log into Vercel (`npx vercel login`) and run the
-> deploy script (Section 6).
+| Source code | ✅ On GitHub, `main` branch |
+| Repository visibility | ⚠️ **Public** — contains the internal PRD `.docx`. Switch to Private if unintended. |
+| Secrets | ✅ Safe — `.env`, `.env.local`, `.vercel/` are git-ignored, never uploaded |
+| CI/CD | ✅ GitHub → Vercel auto-deploy on push to `main` |
+| **Production deployment** | ✅ **Live** at https://part-a-v2.vercel.app |
+| Production env vars | ✅ All 6 keys working (verified end-to-end on production) |
+| End-to-end testing | ✅ Full matrix passed on production, 3 July 2026 (see §8) |
+| Access control | ❌ None — open to anyone with the URL |
 
 ---
 
@@ -47,204 +47,190 @@ intelligence report covering:
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18 + Vite + Tailwind CSS + shadcn/ui |
-| Routing | SPA, client-side; `vercel.json` rewrites all non-`/api` paths to `index.html` |
-| Backend | Vercel Serverless Functions in `/api/*.js` (max duration 60s) |
+| Frontend | React 18 + Vite + Tailwind CSS + shadcn/ui (SPA; `vercel.json` rewrites non-`/api` paths to `index.html`) |
+| Backend | Vercel Serverless Functions in `/api/*.js` (60s max duration) |
 | AI — primary | **Groq** — Llama 3.3 70B |
-| AI — fallback | **Google Gemini** 1.5 Flash (used automatically if Groq fails) |
-| Competitor search | **SerpAPI** (Google Search results) |
-| Competitor scraping | **Browserless** (headless browser for JS-rendered sites) |
-| Product data | **WooCommerce REST API** (adlersden.com) |
+| AI — fallback | **Google Gemini** 1.5 Flash (automatic cascade in `api/_ai.js`) |
+| Competitor search | **SerpAPI** — Google organic (site-scoped brand tiers) + Google Shopping |
+| Competitor catalogs | Direct Shopify catalog reads for ~20 Indian craft-chocolate & snack brands |
+| Competitor scraping | **Browserless** (headless render for JS-heavy pages) + plain-HTTP fallback |
+| Product data | **WooCommerce REST API** (adlersden.com) with Browserless/HTTP fallback layers |
+| Report storage | Browser localStorage (per-user, capped at 20 reports, Export/Import JSON supported) |
 
-> **Note:** The `README.md` mentions "Google Custom Search JSON API" for
-> competitor search, but the actual code and deploy script use **SerpAPI**
-> (`SERP_API_KEY`). Trust the code / `.env.example` over the README here.
+> **README caveat:** the README mentions "Google Custom Search" — the code
+> actually uses **SerpAPI** (`SERP_API_KEY`). Trust the code / `.env.example`.
+
+### The analysis pipeline
+
+```
+User input (URL or concept)
+        ↓
+POST /api/fetch-product          (URL flow only) WooCommerce → Browserless → HTTP+AI waterfall
+        ↓
+POST /api/extract-composition    Classify hamper vs single + extract composition (AI),
+                                 cross-validate dietary claims, backfill from raw text,
+                                 score data completeness incl. missing-field names
+        ↓
+POST /api/search-competitors     Product-class routing (chocolate vs snack pools),
+                                 Shopify catalogs + SerpAPI tiers + Google Shopping in parallel,
+                                 occasion detection, relevance scoring & re-rank,
+                                 junk filters (condiments, non-food, tag-list descriptions),
+                                 hamper item-count estimation + wider-market slots
+        ↓
+POST /api/analyse                Full report (AI) with server-computed per-gram / per-item
+                                 math, sanity ceilings, citation rules, text post-processing
+        ↓
+Report rendered + saved to localStorage
+```
 
 ---
 
-## 4. The analysis pipeline
+## 4. Environment variables
 
-```
-User pastes product URL
-        ↓
-POST /api/fetch-product        → Fetch product from WooCommerce (or mock data in local dev)
-        ↓
-POST /api/extract-composition  → Classify product type + extract composition (AI)
-        ↓
-POST /api/search-competitors   → Find live competitor listings (SerpAPI + Browserless)
-        ↓
-POST /api/analyse              → Generate the full multi-section intelligence report (AI)
-        ↓
-Report page rendered + saved to browser localStorage
-```
-
-Shared AI logic (Groq → Gemini cascade) lives in `api/_ai.js`.
-Shared scraping logic lives in `api/_scrape.js`.
-
----
-
-## 5. Environment variables
-
-All keys live locally in `.env.local` (git-ignored). A template with instructions
-is in `.env.example`. For production they must be set in the **Vercel dashboard**
-(or pushed via `_deploy.ps1`).
+Local values live in `.env.local` (git-ignored); template with instructions in `.env.example`. Production values live in **Vercel → Project Settings → Environment Variables**.
 
 | Variable | Required | Purpose / where to get it |
 |---|---|---|
-| `GROQ_API_KEY` | ✅ Strongly recommended | Primary AI — https://console.groq.com |
-| `GEMINI_API_KEY` | ✅ Fallback AI | https://aistudio.google.com/app/apikey |
-| `SERP_API_KEY` | Optional (recommended) | Competitor search — https://serpapi.com/manage-api-key |
+| `GROQ_API_KEY` | ✅ | Primary AI — https://console.groq.com |
+| `GEMINI_API_KEY` | ✅ | Fallback AI — https://aistudio.google.com/app/apikey |
+| `SERP_API_KEY` | ✅ recommended | Competitor search — https://serpapi.com/manage-api-key |
 | `BROWSERLESS_API_KEY` | Optional | Headless scraping — https://www.browserless.io |
-| `WC_CONSUMER_KEY` | ✅ Required in prod | WooCommerce REST API key (Read-only) |
-| `WC_CONSUMER_SECRET` | ✅ Required in prod | WooCommerce REST API secret |
+| `WC_CONSUMER_KEY` | ✅ in prod | WooCommerce REST key (Read-only) — WP Admin → WooCommerce → Settings → Advanced → REST API |
+| `WC_CONSUMER_SECRET` | ✅ in prod | WooCommerce REST secret |
 | `APP_PASSWORD` | ❌ Not wired up | Described in `.env.example` but **unused** by current code |
 | `VITE_DEV_PASSWORD` | ❌ Not wired up | Described in `.env.example` but **unused** by current code |
 
-**WooCommerce keys:** WordPress Admin → WooCommerce → Settings → Advanced →
-REST API → Add key (Read permission is sufficient).
-
-> **Note:** the `_deploy.ps1` script pushes exactly these 6 keys:
-> `GROQ_API_KEY`, `GEMINI_API_KEY`, `SERP_API_KEY`, `BROWSERLESS_API_KEY`,
-> `WC_CONSUMER_KEY`, `WC_CONSUMER_SECRET` — which (verified 2026-06-12) are all
-> working in production. `APP_PASSWORD` / `VITE_DEV_PASSWORD` are not pushed and
-> not used by the code.
-
-> **Local-dev behaviour:** if `WC_CONSUMER_KEY` is missing in local dev, the tool
-> falls back to realistic mock product data. In production this fallback is disabled.
+The helper script `_deploy.ps1` pushes the 6 real keys from `.env.local` to Vercel Production and deploys — all verified working in production. Note: **changing an env var in Vercel does not redeploy automatically**; push a commit or trigger a redeploy after saving.
 
 ---
 
-## 6. How to deploy (Vercel)
+## 5. How to deploy
 
-The repo includes a one-shot helper: **`_deploy.ps1`**.
+**Normal flow (recommended):** commit → `git push origin main` → Vercel builds and deploys automatically (~1 min). Nothing else to do.
 
-```powershell
-# From the project root, in PowerShell:
-npx vercel login      # one-time: completes in the browser
-.\_deploy.ps1         # pushes env vars to Production, then builds & deploys
-```
-
-What `_deploy.ps1` does:
-1. Checks you're logged into Vercel (prompts login if not)
-2. Reads the 6 API keys from `.env.local` and pushes them to Vercel **Production**
-   (replacing existing values each run — harmless to re-run)
-3. Builds and deploys to production, then prints the live URL
-
-After it finishes, the production URL is printed in the terminal — that's the live tool.
-
-**Manual alternative (Vercel dashboard):**
-1. Import the GitHub repo at https://vercel.com
-2. Set all env vars in Project Settings → Environment Variables
-3. Deploy — `vercel.json` handles SPA routing + function timeouts automatically
+**Manual/CLI flow:** `npx vercel login` once, then `.\_deploy.ps1` (refreshes the 6 env keys and deploys) — mainly useful when rotating API keys.
 
 ---
 
-## 7. Local development
+## 6. Local development
 
 ```bash
 git clone https://github.com/AdlersDen/adlers-den-intelligence.git
 cd adlers-den-intelligence
 npm install
-cp .env.example .env.local   # then fill in your keys
-npm run dev                  # http://localhost:5173
+cp .env.example .env.local   # fill in keys
+npm run dev                  # http://localhost:5173 — FRONTEND ONLY
 ```
 
-> ⚠️ Plain `npm run dev` runs the **frontend only** — the `/api/*` serverless
-> functions are NOT available. To test the full pipeline (API routes) locally,
-> use the Vercel CLI instead:
->
-> ```bash
-> npx vercel dev
-> ```
+> ⚠️ Plain `npm run dev` does **not** serve the `/api/*` functions. To run the
+> full pipeline locally use `npx vercel dev`, or `node _local-server.mjs`.
 
-Useful scripts (`package.json`):
-- `npm run dev` — Vite dev server (frontend only)
-- `npm run build` — production build to `dist/`
-- `npm run preview` — preview the production build
-- `npm run lint` / `npm run lint:fix` — ESLint
-- `npm run typecheck` — type-check via jsconfig
+Useful scripts: `npm run build` · `npm run lint` / `lint:fix` · `npm run typecheck` · `node _pipeline.mjs <product-url>` — end-to-end smoke test that prints each step's output (set `BASE=https://part-a-v2.vercel.app` to run it against production).
 
 ---
 
-## 8. Project structure
+## 7. Project structure
 
 ```
 adlers-den-intelligence/
 ├── api/                        # Vercel serverless functions
 │   ├── _ai.js                  # Shared AI utility (Groq → Gemini cascade)
-│   ├── _scrape.js              # Shared scraping helper (Browserless)
-│   ├── fetch-product.js        # Step 1: fetch product from WooCommerce
-│   ├── extract-composition.js  # Step 2: classify + extract composition
-│   ├── search-competitors.js   # Step 3: SerpAPI competitor search
-│   └── analyse.js              # Step 4: comparative intelligence report
+│   ├── _scrape.js              # Scraping helpers (Shopify catalogs, Browserless, plain HTTP)
+│   ├── fetch-product.js        # Step 1: 3-layer product fetch (WooCommerce → Browserless → HTTP+AI)
+│   ├── extract-composition.js  # Step 2: classify + extract + completeness scoring
+│   ├── search-competitors.js   # Step 3: multi-source competitor search + filters + ranking
+│   └── analyse.js              # Step 4: report generation + server-side pricing math
 ├── src/
-│   ├── App.jsx
-│   ├── lib/analysisService.js  # Frontend API orchestrator
-│   ├── pages/
-│   │   ├── Dashboard.jsx        # URL input + analysis trigger
-│   │   └── Report.jsx           # Full report display
+│   ├── lib/analysisService.js  # Frontend orchestrator (URL flow + both concept flows)
+│   ├── pages/Dashboard.jsx     # Input UI + progress   ·  pages/Report.jsx — report display
 │   └── components/
-│       ├── analysis/            # URLInput, ConceptInput, AnalysisProgress
-│       ├── layout/              # AppLayout, Sidebar
-│       └── report/              # ExecutiveSummary, Pricing, Composition,
-│                                #   Improvements, MarketGaps sections
-├── entities/Analysis.db         # Small schema/seed file
-├── _deploy.ps1                  # One-shot Vercel deploy helper
-├── _local-server.mjs            # Local API server for testing
-├── _pipeline.mjs                # Local end-to-end pipeline smoke test
-├── .env.example                 # Env var template
-├── vercel.json                  # SPA rewrite + 60s function timeout
-└── DEPLOYMENT.md                # Additional deploy notes
+│       ├── analysis/           # URLInput, ConceptInput, AnalysisProgress
+│       └── report/             # Report sections (CompositionProfile, CompetitorTable, …)
+├── _pipeline.mjs               # CLI end-to-end smoke test
+├── _local-server.mjs           # Minimal local API server
+├── _deploy.ps1                 # CLI deploy + env-var push helper
+├── DOMAIN_MIGRATION.md         # What to change if the store's domain changes
+├── DEPLOYMENT.md · README.md · HANDOVER.md (this file)
+└── vercel.json                 # SPA rewrite + 60s function timeout
 ```
 
 ---
 
-## 9. Accounts / access needed to operate this
+## 8. Testing performed (all on production, 2–3 July 2026)
 
-The next owner will need access to (or fresh keys for):
+Every flow was exercised end-to-end against the live deployment, both via scripted API runs (28/28 automated checks passed) and manually through the UI with screenshot review:
 
-- **GitHub** — `AdlersDen` org, `adlers-den-intelligence` repo
-- **Vercel** — the team that owns project `part-a-v2`
-  (orgId `team_vE63hC6zIKL4kd8uEW6wmznZ`)
-- **Groq** account (primary AI key)
-- **Google AI Studio** (Gemini fallback key)
-- **SerpAPI** account (competitor search)
-- **Browserless** account (scraping)
-- **WooCommerce / WordPress admin** on adlersden.com (to issue REST API keys)
+| Flow | Test case | Result |
+|---|---|---|
+| URL — chocolate, variable price | Almond Rochers, Intense Orange Barks, Chocolate Coated Almonds, Rocky Road Bites | ✅ per-gram exact (e.g. ₹4.61/g = 323÷70) |
+| URL — snack | Chilli Guava | ✅ snack routing, condiment filter, real dried-guava comparators |
+| URL — hamper | Grand Christmas Gift Hamper (₹3,380, 13 items) | ✅ hamper classification, ₹260/item math, chocolate-hamper comparators + wider-market slots |
+| Concept — text brief | Pistachio Kunafa Clusters · Filter Coffee Bar (12/12 extraction) | ✅ incl. direct "Dubai chocolate" competitors found |
+| Concept — structured | Hazelnut Praline Rochers · Paan Gulkand White Truffles | ✅ white-chocolate dietary guard, Diwali occasion banner |
+| Honest-failure paths | Occasion mismatch banners, missing-fields dropdown, empty-description store products | ✅ fail loudly, never invent data |
 
-> The actual key *values* are in `.env.local` on the current developer's machine —
-> they are **not** in the repo. Make sure these are handed over securely
-> (password manager / encrypted channel), not committed to git.
+**Verification style used throughout:** every AI-quoted number was recomputed by hand (pack price ÷ grams, price ÷ item count, premium percentages) — the server computes these and feeds them to the model, so they are deterministic.
 
 ---
 
-## 10. Known issues & open items
+## 9. Fixes & features shipped during final testing (2–3 July)
 
-1. **🔓 No access control (highest priority)** — the app and all `/api/*` routes
-   are publicly reachable at https://part-a-v2.vercel.app. Anyone with the URL can
-   run analyses, which **consumes Groq / SerpAPI / Browserless credits** and exposes
-   the WooCommerce-backed data. The README/`env.example` describe a password gate
-   (`APP_PASSWORD`, `PasswordGate`, `/api/auth-check`) that was **never implemented**.
-   Options: implement the password gate, add Vercel Password Protection
-   (Project → Settings → Deployment Protection), or restrict access another way.
-2. **Repo is public** — it contains the internal PRD (`Adlers_Den_Product_Intelligence_PRD.docx`).
-   Switch to Private (Settings → Danger Zone) if that document shouldn't be public.
-3. **README vs. code mismatch** — README mentions Google Custom Search + a password
-   gate; the code actually uses SerpAPI and has no gate. Worth updating the README.
-4. **Set the repo "Website" field** — point it at https://part-a-v2.vercel.app
-   so the live tool is linked from GitHub.
+The next maintainer should know these exist — they encode hard-won lessons:
+
+1. **Price-range parsing bug (critical):** variable products ("₹275 – ₹428") had all digits concatenated → ₹3,934/g instead of ₹3.93/g, corrupting every pricing verdict. Now parses the range floor; plus a **₹100/g sanity ceiling** so a bad parse can never reach the model or UI again. (`api/analyse.js`)
+2. **Hamper misrouting:** chocolate hampers categorised e.g. "Christmas Gifts" fell into the *snack* brand pool (hamper compositions carry `chocolate_types_present`, not `chocolate_type`) and were compared to millet snacks. Fixed in `detectProductClass`. (`api/search-competitors.js`)
+3. **Hamper per-item honesty:** item counts are now estimated for *all* comparators (a "Pack of 20" was previously priced as one item).
+4. **Wider-market slots (hampers):** one extra unscoped Google Shopping query (occasion-aware, e.g. "christmas gift hamper india"); top 6 slots stay craft-chocolate comparators, last 2 carry an amber "wider gifting market" badge and are prompt-flagged as price context only.
+5. **Junk filters:** condiments (pickles/chutney/podi) excluded for snack searches; non-food scent products (air fresheners, candles) excluded everywhere; Shopify tag-list "descriptions" (`bogo-offer, city-bangalore…`) stripped.
+6. **Missing-fields dropdown:** `data_completeness.missing` names every unextracted field; both the limited-data banner and the "X/12 fields extracted" caption expand to list them.
+7. **Citation hardening:** the analyst must quote competitor product names verbatim (was embellishing names); rupee decimal artefacts ("₹4. 99/g") joined deterministically; "Belgian/Swiss chocolate" now recognised as `origin_country`.
+8. **UI polish:** pack chips no longer show a stray separator dot; ingredient chips lowercased; occasion-banner wording made product-type-neutral.
+
+Full detail is in the git history — commit messages are written to explain *why*.
 
 ---
 
-## 11. Quick-start checklist for the new owner
+## 10. Accounts / access needed to operate this
+
+- **GitHub** — `AdlersDen` org, `adlers-den-intelligence` repo (pushes to `main` deploy to production!)
+- **Vercel** — team owning project `part-a-v2` (env vars, domains, deploy logs)
+- **Groq**, **Google AI Studio** (Gemini), **SerpAPI**, **Browserless** accounts (key rotation)
+- **WordPress admin** on adlersden.com (WooCommerce REST keys)
+
+Key *values* are in `.env.local` on the current developer's machine and in Vercel env settings — **not** in the repo. Hand them over via a password manager, never git.
+
+---
+
+## 11. Known issues & limitations (current, honest list)
+
+1. **🔓 No access control (highest priority).** The app and all `/api/*` routes are publicly reachable. Anyone with the URL can run analyses, consuming Groq/SerpAPI/Browserless credits. Quickest fix: Vercel **Deployment Protection** (Project → Settings) — no code needed. Proper fix: implement the password gate the README describes.
+2. **Repo is public** and contains the internal PRD `.docx`. Switch to Private if that matters.
+3. **README drift:** README still says Google Custom Search + password gate; reality is SerpAPI + no gate.
+4. **Store data quality:** `big-hamper` and both sugar-free hampers on adlersden.com have **empty descriptions and a ₹106 price** — the tool correctly refuses to analyse them (honest failure), but the store data itself should be fixed.
+5. **Structured concept form is single-product only** (no items field; classification hardcoded). Hamper concepts must use the text brief — the AI classifies them correctly.
+6. **Scope boundary:** competitor data covers chocolate & snack brand pools only. A concept hamper that is *mostly* non-chocolate (wine, cushions) would silently route to the snack pool with poor comparators — a "mostly non-chocolate hamper" warning banner is the suggested future fix.
+7. **Snack completeness scores read low by design:** 7 of the 12 scored fields are chocolate-specific, so snacks realistically cap around 5/12. The missing-fields dropdown makes this transparent.
+8. **LLM phrasing varies between runs** (temperature 0.2). Numbers, verdict inputs, competitor sets, and math are server-computed and deterministic; the prose is not.
+9. **Search latency varies** — the competitor step is usually ~8s but occasionally ~30s when SerpAPI is slow (frontend timeout is 90s, so it never hangs).
+
+---
+
+## 12. Related documents
+
+- **`DOMAIN_MIGRATION.md`** — exactly what to change (6 code locations, key handling, redirect trap) if the store's domain ever changes
+- **`PROJECT_REPORT.md` / `.pdf`** — the academic project report
+- **`DEPLOYMENT.md`** — original deploy notes · **`README.md`** — setup & stack (with the drift noted in §11.3)
+
+---
+
+## 13. Quick-start checklist for the new owner
 
 - [ ] Get access to the GitHub repo and Vercel project
 - [ ] Receive the `.env.local` key values securely
-- [ ] `git clone` + `npm install`
-- [ ] Copy keys into `.env.local`
-- [ ] `npx vercel dev` to confirm the full pipeline works locally
-- [ ] Confirm you can access the live tool at https://part-a-v2.vercel.app
-- [ ] **Decide how to protect access** — the tool is currently open to anyone (§10.1)
-- [ ] `npx vercel login` → `.\_deploy.ps1` to redeploy / refresh keys when needed
-- [ ] Decide on repo visibility (Public vs. Private)
-```
+- [ ] `git clone` + `npm install` + copy keys into `.env.local`
+- [ ] `npx vercel dev` — run one URL analysis and one concept analysis locally
+- [ ] Confirm the live tool works: https://part-a-v2.vercel.app (try a product URL end-to-end)
+- [ ] **Decide how to protect access** — the tool is currently open (§11.1)
+- [ ] Decide repo visibility (Public vs Private)
+- [ ] Read `DOMAIN_MIGRATION.md` before any domain/store change
+- [ ] Remember: **pushing to `main` deploys to production** — use branches for experiments
