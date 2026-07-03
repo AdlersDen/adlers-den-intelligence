@@ -913,6 +913,21 @@ function termsForBrand(globalTerms, domain, composition) {
   return [...new Set([...globalTerms, ...extra])];
 }
 
+// Some brands' catalog "descriptions" are just their internal tag list
+// ("bogo-offer, city-bangalore, city-chennai, …" — Smoor does this). Strip
+// tag-like tokens so they never reach the UI or the analyst prompt as if
+// they were product copy; if the whole string was tags, blank it.
+function cleanCatalogDescription(desc) {
+  if (!desc) return '';
+  const segs = String(desc).split(/,\s*/);
+  const TAG_RE = /^(city-[a-z-]+|bogo-?offer|combo-?offer|offer|new-?arrivals?|best-?sellers?|out-?of-?stock|sale|featured)$/i;
+  const kept = segs.filter(s => !TAG_RE.test(s.trim()));
+  if (kept.length === 0) return '';
+  // Mostly tags with a word or two left over → still junk, drop it.
+  if (kept.length < segs.length / 2) return '';
+  return kept.join(', ').trim();
+}
+
 async function catalogSearch(composition, productType, productPrice, productName, productCategory, productClass = 'chocolate') {
   const occasion = detectOccasion(productName, productCategory);
   const terms    = catalogTermsFor(composition, productType, occasion, productClass);
@@ -950,7 +965,7 @@ async function catalogSearch(composition, productType, productPrice, productName
       candidates.push({
         brand:            BRAND_MAP[domain] || domain.split('.')[0],
         product_name:     p.name,
-        description:      p.description || '',
+        description:      cleanCatalogDescription(p.description),
         url:              p.url,
         price:            p.price || 'N/A',
         price_numeric:    p.price_numeric ?? null,

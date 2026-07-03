@@ -196,7 +196,7 @@ export default function Report() {
                 Limited direct {analysis.occasion_match.detected.charAt(0).toUpperCase() + analysis.occasion_match.detected.slice(1)} matches available.
               </p>
               <p className="font-body text-xs text-amber-300/70 mt-0.5">
-                Only {analysis.occasion_match.found_count} competitor{analysis.occasion_match.found_count === 1 ? '' : 's'} in the candidate brands sell an explicitly {analysis.occasion_match.detected}-themed product. Remaining comparators below are the closest generic gift hampers from the same brands — treat occasion-specific framing with care.
+                Only {analysis.occasion_match.found_count} competitor{analysis.occasion_match.found_count === 1 ? '' : 's'} in the candidate brands sell an explicitly {analysis.occasion_match.detected}-themed product. Remaining comparators below are the closest generic alternatives from the same brands — treat occasion-specific framing with care.
               </p>
             </div>
           </motion.div>
