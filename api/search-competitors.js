@@ -144,6 +144,11 @@ function detectProductClass(productCategory, composition) {
   // chocolate_type or cocoa% is chocolate; otherwise snack.
   if (composition?.chocolate_type) return 'chocolate';
   if (composition?.cocoa_percentage) return 'chocolate';
+  // Hamper compositions carry chocolate_types_present (array) instead of
+  // chocolate_type — without this check a chocolate hamper categorised as
+  // "Christmas Gifts" was misrouted to the snack brand pool.
+  if (Array.isArray(composition?.chocolate_types_present) && composition.chocolate_types_present.length > 0) return 'chocolate';
+  if (Array.isArray(composition?.items) && composition.items.some(i => /chocolate/i.test(`${i?.category || ''} ${i?.chocolate_type || ''} ${i?.name || ''}`))) return 'chocolate';
   return 'snack';
 }
 
@@ -1434,6 +1439,12 @@ export default async function handler(req, res) {
     // founder actually sees (top 3 closest, 4–6 related, rest context).
     for (let i = 0; i < competitors.length; i++) {
       competitors[i]._relevance = i < 3 ? 'closest' : i < 6 ? 'related' : 'context';
+      // Catalog results already carry an estimated item count; SerpAPI ones
+      // don't, so a "Pack of 20" combo was being priced as one item in the
+      // hamper per-item math. Estimate for any competitor that lacks it.
+      if (productType === 'hamper' && !Number.isFinite(competitors[i]._estimated_item_count)) {
+        competitors[i]._estimated_item_count = estimateHamperItemCount(competitors[i].product_name, competitors[i].description);
+      }
     }
 
     // ── Occasion-match summary ──
