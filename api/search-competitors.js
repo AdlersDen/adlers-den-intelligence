@@ -1368,6 +1368,18 @@ export default async function handler(req, res) {
       ? 'serpapi'
       : 'none';
 
+    // Non-food items leak in when flavour words double as scent words —
+    // "Coffee Beans For Fragrance" (air freshener) matched a filter-coffee
+    // chocolate search. Applies to every product class.
+    const NON_FOOD_TITLE_RE = /\b(fragrances?|air\s*fresheners?|diffusers?|candles?|tealights?|soaps?|perfumes?|room\s*spray|incense|essential\s*oils?|body\s*(?:wash|lotion|butter|scrub)|shampoo|wax\s*melts?|potpourri)\b/i;
+    {
+      const before = competitors.length;
+      competitors = competitors.filter(c => !NON_FOOD_TITLE_RE.test(String(c.product_name || '')));
+      if (competitors.length < before) {
+        console.log(`[search-competitors] dropped ${before - competitors.length} non-food result(s)`);
+      }
+    }
+
     // Condiments are never comparators for Adler's snack SKUs (dried fruits,
     // flavoured nuts) — SerpAPI matches flavour words ("chilli") to pickles
     // and chutney powders. Titles like "Masala Guava" survive because the
