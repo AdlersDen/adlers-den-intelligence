@@ -1103,7 +1103,7 @@ async function catalogSearch(composition, productType, productPrice, productName
 // so results are pre-filtered to the right kind of source. If every scoped
 // tier comes back empty, falls back to one broad-web query.
 // Returns { competitors, query, callsMade }.
-async function serpApiSearch(composition, productType, productPrice, apiKey, productClass = 'chocolate') {
+async function serpApiSearch(composition, productType, productPrice, apiKey, productClass = 'chocolate', productName = '', productCategory = '') {
   const MAX_TIER_CALLS = 4; // cost guardrail — never make more than this
   const baseQuery = buildSearchQuery(composition, productType, productPrice, productClass);
   const tierKeys  = tiersForPriceTier(getPriceTier(productPrice), productClass).slice(0, MAX_TIER_CALLS);
@@ -1124,6 +1124,22 @@ async function serpApiSearch(composition, productType, productPrice, apiKey, pro
     return [];
   });
 
+  // Hampers only: one extra UNSCOPED Shopping query for the wider gifting
+  // market (FNP / Kuuraii / general gifting portals). These are labelled
+  // wider-market context and capped at 2 in the final merge, so the craft
+  // chocolate comparators always keep the top slots.
+  let widerPromise = Promise.resolve([]);
+  if (productType === 'hamper') {
+    const occ = detectOccasion(productName, productCategory);
+    const wideQuery = `${occ ? occ.occasion + ' ' : ''}gift hamper india`;
+    console.log(`[search-competitors] wider-market shopping query: "${wideQuery}"`);
+    callsMade += 1;
+    widerPromise = serpShopping(wideQuery, apiKey).catch(err => {
+      console.warn(`[search-competitors] wider-market shopping failed: ${err.message}`);
+      return [];
+    });
+  }
+
   const tierFetches = tierKeys.map(async (key) => {
     const domains = SERP_TIERS[key] || [];
     if (domains.length === 0) return [];
@@ -1137,9 +1153,14 @@ async function serpApiSearch(composition, productType, productPrice, apiKey, pro
       return [];
     }
   });
-  const [shoppingRaw, tierResults] = await Promise.all([shoppingPromise, Promise.all(tierFetches)]);
+  const [shoppingRaw, tierResults, widerRaw] = await Promise.all([shoppingPromise, Promise.all(tierFetches), widerPromise]);
   let items = tierResults.flat();
   const shoppingCompetitors = normalizeShoppingResults(shoppingRaw, productType, productPrice, composition);
+  // Wider-market results share the shopping normaliser (type filter, brand
+  // parse, price sort) and are flagged so the merge can slot them last.
+  const widerMarket = normalizeShoppingResults(widerRaw, productType, productPrice, composition)
+    .slice(0, 4)
+    .map(c => ({ ...c, _wider_market: true, _enriched_source: 'google_shopping_market' }));
 
   // If every organic tier came back empty AND shopping gave nothing, one
   // final broad-web call so we never return zero on a novel product.
@@ -1192,8 +1213,8 @@ async function serpApiSearch(composition, productType, productPrice, apiKey, pro
     merged.push(c);
   }
 
-  console.log(`[search-competitors] SerpAPI returned ${merged.length} competitors (${shoppingCompetitors.length} shopping + ${filteredOrganic.length} organic) across ${callsMade} calls`);
-  return { competitors: merged, query, callsMade };
+  console.log(`[search-competitors] SerpAPI returned ${merged.length} competitors (${shoppingCompetitors.length} shopping + ${filteredOrganic.length} organic, +${widerMarket.length} wider-market) across ${callsMade} calls`);
+  return { competitors: merged, widerMarket, query, callsMade };
 }
 
 // ── Normalise Google Shopping results → competitor shape ───
@@ -1355,11 +1376,11 @@ export default async function handler(req, res) {
     const [catalogResult, serpResult] = await Promise.all([
       catalogSearch(composition, productType, productPrice, productName, productCategory, productClass),
       SERP_API_KEY
-        ? serpApiSearch(composition, productType, productPrice, SERP_API_KEY, productClass).catch(err => {
+        ? serpApiSearch(composition, productType, productPrice, SERP_API_KEY, productClass, productName, productCategory).catch(err => {
             console.warn('[search-competitors] SerpAPI failed:', err.message);
-            return { competitors: [], query: '[serpapi failed]', callsMade: 0 };
+            return { competitors: [], widerMarket: [], query: '[serpapi failed]', callsMade: 0 };
           })
-        : Promise.resolve({ competitors: [], query: '[no SERP_API_KEY]', callsMade: 0 }),
+        : Promise.resolve({ competitors: [], widerMarket: [], query: '[no SERP_API_KEY]', callsMade: 0 }),
     ]);
 
     // Merge, deduping by URL AND by a normalised title key so near-identical
@@ -1432,8 +1453,23 @@ export default async function handler(req, res) {
       }
     }
 
-    // Cap at 8.
-    competitors = competitors.slice(0, 8);
+    // Cap at 8 — but when wider-market gifting results exist (hampers), keep
+    // the top 6 comparators and reserve the last 2 slots for the broader
+    // gifting market (FNP-style portals), deduped against the main list.
+    const widerMarket = serpResult.widerMarket || [];
+    if (widerMarket.length > 0) {
+      competitors = competitors.slice(0, 6);
+      for (const w of widerMarket) {
+        if (competitors.length >= 8) break;
+        const tk = titleKey(w);
+        if ((w.url && seen.has(w.url)) || (tk && seenTitles.has(tk))) continue;
+        if (w.url) seen.add(w.url);
+        if (tk) seenTitles.add(tk);
+        competitors.push(w);
+      }
+    } else {
+      competitors = competitors.slice(0, 8);
+    }
 
     // Re-tag relevance by FINAL position so the badges match the order the
     // founder actually sees (top 3 closest, 4–6 related, rest context).

@@ -44,7 +44,14 @@ export default function CompetitorTable({ competitors, searchQuality }) {
                       <h4 className="font-body text-sm font-semibold text-foreground truncate">
                         {comp.product_name}
                       </h4>
-                      <p className="text-xs font-body text-muted-foreground">{comp.brand}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-body text-muted-foreground">{comp.brand}</p>
+                        {comp._wider_market && (
+                          <Badge variant="outline" className="text-[10px] font-body text-amber-400/80 border-amber-500/30 px-1.5 py-0">
+                            wider gifting market
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {/* price comes from backend as a string ("₹1,299") or "N/A";

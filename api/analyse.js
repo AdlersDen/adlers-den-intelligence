@@ -231,8 +231,9 @@ function buildHamperAnalysisUser(productData, composition, competitors) {
   const validPricesCount   = hasCompetitors ? competitors.filter(c => c.price_numeric > 0).length : 0;
   const hasPrice           = priceIsKnown(productData.price);
 
+  const widerMarketCount = hasCompetitors ? competitors.filter(c => c._wider_market).length : 0;
   const competitorSection = hasCompetitors
-    ? `## Live Competitor Data (from Google Search)\n${JSON.stringify(competitors, null, 2)}\n(Note: Only ${validPricesCount} of these competitors have known numeric prices.)`
+    ? `## Live Competitor Data (from Google Search)\n${JSON.stringify(competitors, null, 2)}\n(Note: Only ${validPricesCount} of these competitors have known numeric prices.)${widerMarketCount ? `\n(Note: entries marked "_wider_market": true come from generic gifting portals — use them ONLY as broader-market price context, never as craft-chocolate comparators for composition or curation judgements.)` : ''}`
     : `## Competitor Data\nNo live search results. Use your knowledge of these Indian premium chocolate brands:\n${KNOWN_BRANDS.join(', ')}`;
 
   const missingBlock = missingAttributes.length
@@ -346,8 +347,9 @@ function buildSingleChocolateAnalysisUser(productData, composition, competitors)
   const validPricesCount   = hasCompetitors ? competitors.filter(c => c.price_numeric > 0).length : 0;
   const hasPrice           = priceIsKnown(productData.price);
 
+  const widerMarketCount = hasCompetitors ? competitors.filter(c => c._wider_market).length : 0;
   const competitorSection = hasCompetitors
-    ? `## Live Competitor Data (from Google Search)\n${JSON.stringify(competitors, null, 2)}\n(Note: Only ${validPricesCount} of these competitors have known numeric prices.)`
+    ? `## Live Competitor Data (from Google Search)\n${JSON.stringify(competitors, null, 2)}\n(Note: Only ${validPricesCount} of these competitors have known numeric prices.)${widerMarketCount ? `\n(Note: entries marked "_wider_market": true come from generic gifting portals — use them ONLY as broader-market price context, never as craft-chocolate comparators for composition or curation judgements.)` : ''}`
     : `## Competitor Data\nNo live search results. Use your knowledge of these Indian premium chocolate brands:\n${KNOWN_BRANDS.join(', ')}`;
 
   const missingBlock = missingAttributes.length
